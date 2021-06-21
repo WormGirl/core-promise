@@ -219,15 +219,11 @@ class Promise {
   }
 
   finally(callback) {
-    let constructor = this.constructor;
-
-    if ( typeof callback === 'function' ) {
-      // 防止callback函数返回的是promise, 用resolve包装一下
-      return this.then(value => constructor.resolve(callback()).then(() => value),
-                         reason => constructor.resolve(callback()).then(() => { throw reason; }));
-    }
-
-    return this.then(callback, callback);
+    // 防止callback函数返回的是promise, 用resolve包装一下
+    return this.then(
+      value => Promise.resolve(callback()).then(() => value),
+      reason => Promise.resolve(callback()).then(() => { throw reason; })
+    );
   }
 
   static resolve (value) {
