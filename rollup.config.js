@@ -3,10 +3,11 @@ export default {
   input: 'src/promise.js',
   output: {
     file: 'dist/promise.js',
-    format: 'iife',
+    format: 'cjs',
     exports: 'auto',
-    name: 'Promise',
-    extend: true,
+    // format: 'iife',
+    // name: 'Promise',
+    // extend: true,
     plugins: [terser()]
   }
 };

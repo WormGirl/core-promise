@@ -1,13 +1,13 @@
 {
-  "name": "my-promise",
-  "version": "1.0.0",
-  "description": "",
-  "main": "promise.js",
+  "name": "@worm.liu/core-promise",
+  "version": "1.0.1",
+  "description": "update",
+  "main": "dist/promise.js",
   "scripts": {
     "build": "rollup -c",
     "test": "promises-aplus-tests dist/promise"
   },
-  "author": "",
+  "author": "worm.liu",
   "license": "ISC",
   "devDependencies": {
     "promises-aplus-tests": "^2.1.2",

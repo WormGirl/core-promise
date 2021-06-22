@@ -25,33 +25,45 @@ function tryThen(then, value, fulfillmentHandler, rejectionHandler) {
   }
 }
 
-function handleMaybeThenable(promise, maybeThenable, then) {
-  if (typeof then === 'function') {
-    asap(promise => {
-      let sealed = false;
-      let error = tryThen(then, maybeThenable, value => {
-        if (sealed) { return; }
-        sealed = true;
-        if (maybeThenable !== value) {
-          resolve(promise, value);
-        } else {
-          fulfill(promise, value);
-        }
-      }, reason => {
-        if (sealed) { return; }
-        sealed = true;
-   
-        reject(promise, reason);
-      }, 'Settle: ' + (promise._label || ' unknown promise'));
-   
-      if (!sealed && error) {
-        sealed = true;
-        reject(promise, error);
-      }
-    }, promise);
+function handleOwnThenable(promise, thenable) {
+  if (thenable._state === FULFILLED) {
+    fulfill(promise, thenable._result);
+  } else if (thenable._state === REJECTED) {
+    reject(promise, thenable._result);
+  // 如果是pending状态
   } else {
-    fulfill(promise, maybeThenable);
+    subscribe(
+      thenable,
+      undefined,
+      value  => resolve(promise, value),
+      reason => reject(promise, reason)
+    )
   }
+}
+
+function handleForeignThenable(promise, maybeThenable, then) {
+  asap(promise => {
+    let sealed = false;
+    let error = tryThen(then, maybeThenable, value => {
+      if (sealed) { return; }
+      sealed = true;
+      if (maybeThenable !== value) {
+        resolve(promise, value);
+      } else {
+        fulfill(promise, value);
+      }
+    }, reason => {
+      if (sealed) { return; }
+      sealed = true;
+  
+      reject(promise, reason);
+    }, 'Settle: ' + (promise._label || ' unknown promise'));
+  
+    if (!sealed && error) {
+      sealed = true;
+      reject(promise, error);
+    }
+  }, promise);
 }
 
 function resolve (promise, value) {
@@ -67,7 +79,15 @@ function resolve (promise, value) {
       reject(promise, error);
       return;
     }
-    handleMaybeThenable(promise, value, then);
+    // value是promise
+    if (value instanceof Promise) {
+      handleOwnThenable(promise, value);
+    // thenable对象
+    } else if (typeof then === 'function') {
+      handleForeignThenable(promise, value, then);
+    } else {
+      fulfill(promise, value);
+    }
   } else {
     fulfill(promise, value);
   }
@@ -80,20 +100,23 @@ function fulfill(promise, value) {
   promise._result = value;
   promise._state = FULFILLED;
 
+  // 放入任务队列等待执行
   if (promise._subscribers.length !== 0) {
     asap(publish, promise);
   }
 }
 
-// 设置目标promise状态为rejected
 function reject(promise, reason) {
   // promise状态一旦确定，就无法修改
   if (promise._state !== PENDING) return;
+
   promise._state = REJECTED;
   promise._result = reason;
 
-  // 发布该promise catch订阅
-  asap(publish, promise);
+  if (promise._subscribers.length !== 0) {
+    // 放入任务队列等待执行
+    asap(publish, promise);
+  }
 }
 
 // 订阅
@@ -135,7 +158,7 @@ function publish(promise) {
   promise._subscribers.length = 0;
 }
 
-// 调用回调函数
+// 调用onFulfillment, onRejection
 function invokeCallback(settled, promise, callback, detail) {
   let hasCallback = typeof callback === 'function',
       value, error, succeeded = true;
@@ -219,7 +242,6 @@ class Promise {
   }
 
   finally(callback) {
-    // 防止callback函数返回的是promise, 用resolve包装一下
     return this.then(
       value => Promise.resolve(callback()).then(() => value),
       reason => Promise.resolve(callback()).then(() => { throw reason; })
